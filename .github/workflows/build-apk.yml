@@ -18,6 +18,39 @@ jobs:
           cache: true
       - name: Project setup
         run: bash setup.sh
+      - name: Force compileSdk 36 for plugins
+        run: |
+          cat > /tmp/snip.kts <<'EOS'
+          // shabekin-compilesdk
+          subprojects {
+              afterEvaluate {
+                  if (project.name != "app") {
+                      val ext = project.extensions.findByName("android")
+                      if (ext != null) {
+                          val cur = (ext.withGroovyBuilder { "getCompileSdkVersion"() } as? String)
+                              ?.removePrefix("android-")?.substringBefore('.')?.toIntOrNull() ?: 0
+                          if (cur < 36) ext.withGroovyBuilder { "compileSdkVersion"(36) }
+                      }
+                  }
+              }
+          }
+          EOS
+          cat > /tmp/snip.gradle <<'EOS'
+          // shabekin-compilesdk
+          subprojects {
+              afterEvaluate { p ->
+                  if (p.name != 'app' && p.hasProperty('android')) {
+                      def cur = p.android.compileSdkVersion.toString().replace('android-', '').tokenize('.')[0].toInteger()
+                      if (cur < 36) { p.android.compileSdkVersion 36 }
+                  }
+              }
+          }
+          EOS
+          if [ -f android/build.gradle.kts ]; then
+            cat /tmp/snip.kts android/build.gradle.kts > /tmp/new.kts && cp /tmp/new.kts android/build.gradle.kts
+          elif [ -f android/build.gradle ]; then
+            cat /tmp/snip.gradle android/build.gradle > /tmp/new.gradle && cp /tmp/new.gradle android/build.gradle
+          fi
       - name: Build release APK
         run: flutter build apk --release
       - uses: actions/upload-artifact@v4
